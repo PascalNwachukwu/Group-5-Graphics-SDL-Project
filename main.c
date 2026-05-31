@@ -1,13 +1,12 @@
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
+#include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
 #include <stdio.h>
-#undef main
 
 /* ── Window dimensions ── */
 #define WINDOW_WIDTH  900
 #define WINDOW_HEIGHT 600
 
-/* ── Frame border thickness (the gold border) ── */
+/* ── Gold frame border thickness ── */
 #define BORDER 8
 
 /* ──────────────────────────────────────────
@@ -17,37 +16,39 @@
 SDL_Texture* loadTexture(SDL_Renderer* renderer, const char* path) {
     SDL_Surface* surface = IMG_Load(path);
     if (!surface) {
-        printf("Could not load image %s: %s\n", path, IMG_GetError());
+        /* Tell us exactly which image failed and why */
+        printf("Could not load image %s: %s\n", path, SDL_GetError());
         return NULL;
     }
+    /* Convert the surface into a texture the renderer can draw */
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);  /* surface no longer needed once texture is made */
+    SDL_DestroySurface(surface); /* surface no longer needed once texture is made */
     return texture;
 }
 
 /* ──────────────────────────────────────────
-   Helper: draw a framed image on the screen
+   Helper: draw a gold-framed image on screen
    - renderer : the SDL renderer
    - texture  : the image to draw
-   - x, y     : top-left position of the FRAME
-   - w, h     : width and height of the IMAGE
+   - x, y     : top-left position of the frame
+   - w, h     : width and height of the image
    ────────────────────────────────────────── */
 void drawFramedImage(SDL_Renderer* renderer, SDL_Texture* texture,
-                     int x, int y, int w, int h) {
+                     float x, float y, float w, float h) {
 
-    /* 1. Draw the gold border (slightly bigger rectangle behind the image) */
-    SDL_Rect borderRect = {
-        x - BORDER,
-        y - BORDER,
-        w + BORDER * 2,
-        h + BORDER * 2
+    /* 1. Draw the gold border rectangle behind the image */
+    SDL_FRect borderRect = {
+        x - BORDER,        /* start a little to the left   */
+        y - BORDER,        /* start a little above          */
+        w + BORDER * 2,    /* wider than the image          */
+        h + BORDER * 2     /* taller than the image         */
     };
-    SDL_SetRenderDrawColor(renderer, 218, 165, 32, 255); /* gold colour */
+    SDL_SetRenderDrawColor(renderer, 218, 165, 32, 255); /* gold colour (R,G,B,A) */
     SDL_RenderFillRect(renderer, &borderRect);
 
-    /* 2. Draw the image on top of the border */
-    SDL_Rect imageRect = {x, y, w, h};
-    SDL_RenderCopy(renderer, texture, NULL, &imageRect);
+    /* 2. Draw the actual image on top of the gold border */
+    SDL_FRect imageRect = {x, y, w, h};
+    SDL_RenderTexture(renderer, texture, NULL, &imageRect);
 }
 
 /* ══════════════════════════════════════════
@@ -55,26 +56,25 @@ void drawFramedImage(SDL_Renderer* renderer, SDL_Texture* texture,
    ══════════════════════════════════════════ */
 int main(int argc, char* argv[]) {
 
-    /* ── 1. Initialise SDL and SDL_image ── */
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    /* ── 1. Initialise SDL ── */
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         printf("SDL_Init Error: %s\n", SDL_GetError());
         return 1;
     }
 
-    if (!(IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG))) {
-        printf("IMG_Init Error: %s\n", IMG_GetError());
+    /* ── 2. Initialise SDL_image for PNG and JPG support ── */
+    if (!IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG)) {
+        printf("IMG_Init Error: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
 
-    /* ── 2. Create the window ── */
+    /* ── 3. Create the window ── */
     SDL_Window* window = SDL_CreateWindow(
-        "3D Rendering",           /* title bar text          */
-        SDL_WINDOWPOS_CENTERED,   /* centre horizontally     */
-        SDL_WINDOWPOS_CENTERED,   /* centre vertically       */
-        WINDOW_WIDTH,             /* width  in pixels        */
-        WINDOW_HEIGHT,            /* height in pixels        */
-        SDL_WINDOW_SHOWN          /* make it visible immediately */
+        "3D Rendering",   /* title bar text      */
+        WINDOW_WIDTH,     /* width  in pixels    */
+        WINDOW_HEIGHT,    /* height in pixels    */
+        0                 /* no special flags    */
     );
     if (!window) {
         printf("SDL_CreateWindow Error: %s\n", SDL_GetError());
@@ -82,10 +82,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    /* ── 3. Create the renderer (the drawing tool) ── */
-    SDL_Renderer* renderer = SDL_CreateRenderer(
-        window, -1, SDL_RENDERER_ACCELERATED
-    );
+    /* ── 4. Create the renderer (the drawing tool) ── */
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
     if (!renderer) {
         printf("SDL_CreateRenderer Error: %s\n", SDL_GetError());
         SDL_DestroyWindow(window);
@@ -93,12 +91,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    /* ── 4. Load all images ── */
+    /* ── 5. Load all images ── */
     SDL_Texture* wall   = loadTexture(renderer, "assets/scenes/wall.png");
     SDL_Texture* scene1 = loadTexture(renderer, "assets/scenes/scene1.png");
     SDL_Texture* scene2 = loadTexture(renderer, "assets/scenes/scene2.png");
-    SDL_Texture* opengl = loadTexture(renderer, "assets/scenes/opengl.png");
-
+    SDL_Texture* opengl = loadTexture(renderer, "assets/scenes/3D nonagon image.png");
     /* Stop if any image failed to load */
     if (!wall || !scene1 || !scene2 || !opengl) {
         printf("One or more images failed to load. Check assets/scenes/ folder.\n");
@@ -108,46 +105,56 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    /* ── 5. Main event loop — keeps window open ── */
-    int running = 1;
+    /* ── 6. Main event loop — keeps the window open ── */
     SDL_Event event;
+    bool running = true;
 
     while (running) {
 
-        /* Check for events (like clicking the X to close) */
+        /* Check for events (closing window or pressing ESC) */
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                running = 0;  /* exit the loop */
+
+            /* User clicked the X button to close */
+            if (event.type == SDL_EVENT_QUIT) {
+                running = false;
+            }
+
+            /* User pressed a key on the keyboard */
+            if (event.type == SDL_EVENT_KEY_DOWN) {
+                /* ESC key closes the window */
+                if (event.key.key == SDLK_ESCAPE) {
+                    running = false;
+                }
             }
         }
 
-        /* ── 6. Draw everything ── */
+        /* ── 7. Draw everything ── */
 
-        /* Clear screen */
+        /* Clear the screen to black first */
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        /* Draw wall background stretched across full window */
-        SDL_Rect fullWindow = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
-        SDL_RenderCopy(renderer, wall, NULL, &fullWindow);
+        /* Draw the stone wall background stretched across the full window */
+        SDL_FRect fullWindow = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
+        SDL_RenderTexture(renderer, wall, NULL, &fullWindow);
 
-        /* Draw scene1 — top left
-           Position: x=60,  y=80   Size: 260 x 200 */
+        /* Draw scene1 (Blender scene 1) — top left
+           Position: x=60,  y=80   Size: 260 x 200     */
         drawFramedImage(renderer, scene1, 60, 80, 260, 200);
 
-        /* Draw scene2 — top right
-           Position: x=580, y=80   Size: 260 x 200 */
+        /* Draw scene2 (Blender scene 2) — top right
+           Position: x=580, y=80   Size: 260 x 200     */
         drawFramedImage(renderer, scene2, 580, 80, 260, 200);
 
         /* Draw opengl scene — bottom centre
-           Position: x=330, y=330  Size: 240 x 200 */
+           Position: x=330, y=330  Size: 240 x 200     */
         drawFramedImage(renderer, opengl, 330, 330, 240, 200);
 
         /* Push everything to the screen */
         SDL_RenderPresent(renderer);
     }
 
-    /* ── 7. Clean up everything before exiting ── */
+    /* ── 8. Clean up everything before exiting ── */
     SDL_DestroyTexture(wall);
     SDL_DestroyTexture(scene1);
     SDL_DestroyTexture(scene2);

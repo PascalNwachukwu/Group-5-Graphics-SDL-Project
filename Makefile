@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -I/mingw64/include/SDL2
-LDFLAGS = -L/mingw64/lib -mwindows -lmingw32 -lSDL2 -lSDL2_image
+CFLAGS = -Wall -I/mingw64/include/SDL3
+LDFLAGS = -L/mingw64/lib -lSDL3 -lSDL3_image
 
 all:
 	$(CC) $(CFLAGS) -o sdl-composition main.c $(LDFLAGS)
