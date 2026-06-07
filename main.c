@@ -68,8 +68,8 @@ int main(int argc, char* argv[]) {
         SDL_FRect fullWindow = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
         SDL_RenderTexture(renderer, wall, NULL, &fullWindow);
         drawFramedImage(renderer, scene1, 60, 80, 260, 200);
-        drawFramedImage(renderer, scene2, 580, 80, 260, 200);
-        drawFramedImage(renderer, opengl, 330, 330, 240, 200);
+        drawFramedImage(renderer, scene2, 580, 80, 260, 280);
+        drawFramedImage(renderer, opengl, 240, 330, 240, 200);
         SDL_RenderPresent(renderer);
     }
     SDL_DestroyTexture(wall);
